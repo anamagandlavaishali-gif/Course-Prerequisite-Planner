@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Prerequisite Planner — Algorithm-Centric Visualizer & DAG Scheduler</title>
+  <meta name="description" content="Interactive university course prerequisite planner powered by directed graph algorithms (Kahn's Topological Sort, BFS, DFS, Cycle Detection, and Semester-wise constraint scheduling).">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="brand-wrapper">
+        <div class="brand-icon" aria-hidden="true">🎓</div>
+        <div>
+          <h1 class="brand-title">Course Prerequisite Planner</h1>
+          <span class="brand-badge">Algorithm-Centric Prototype</span>
+        </div>
+      </div>
+
+      <!-- Presets & Primary Actions -->
+      <div class="header-actions">
+        <div class="preset-selector-group" role="group" aria-label="Curriculum Preset Selection">
+          <button class="preset-btn active" data-preset="standard" id="presetStandardBtn" title="Prompt Standard CS Curriculum (Valid DAG)">
+            <span>📚 CS Core (DAG)</span>
+          </button>
+          <button class="preset-btn btn-danger-tag" data-preset="cyclic" id="presetCyclicBtn" title="Contains intentional prerequisite cycle to demonstrate cycle detection">
+            <span>⚠️ Cyclic Trap (Cycle Demo)</span>
+          </button>
+          <button class="preset-btn" data-preset="extended" id="presetExtendedBtn" title="Full 16-course multi-track degree program">
+            <span>🏛️ 4-Year Extended</span>
+          </button>
+        </div>
+
+        <button class="btn btn-secondary" id="inspectGraphBtn" title="View formal adjacency lists and in-degree table">
+          <span>📊 Graph Matrices</span>
+        </button>
+
+        <button class="btn btn-primary" id="addCourseBtn" title="Add a custom course to the prerequisite graph">
+          <span>＋ Add Course</span>
+        </button>
+
+        <button class="btn btn-icon" id="themeToggleBtn" title="Toggle Dark/Light Mode" aria-label="Toggle Theme">
+          <span>🌙</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main 3-Column Workspace -->
+    <main class="app-workspace">
+      <!-- Left Column: Course Directory & Inspector -->
+      <aside class="sidebar-panel left" aria-label="Course Directory">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>Course Catalog</span>
+            <span class="panel-title-badge" id="totalCoursesCount">0</span>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <div class="search-box">
+            <span style="font-size:0.8rem; color:var(--text-muted);">🔍</span>
+            <input type="text" id="courseSearchInput" placeholder="Filter by code or name..." aria-label="Search courses" />
+          </div>
+
+          <div class="course-card-list" id="courseCardList" role="list">
+            <!-- Dynamically populated course cards -->
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Column: Interactive Graph Visualization Canvas -->
+      <section class="canvas-area" aria-label="Graph Visualization Area">
+        <!-- Floating Canvas Toolbar -->
+        <div class="canvas-toolbar" role="toolbar" aria-label="Canvas Zoom and Layout Controls">
+          <button class="btn btn-icon" id="btnZoomIn" title="Zoom In" aria-label="Zoom In">＋</button>
+          <button class="btn btn-icon" id="btnZoomOut" title="Zoom Out" aria-label="Zoom Out">－</button>
+          <button class="btn btn-secondary" id="btnFitScreen" style="font-size:0.75rem; padding:0.35rem 0.6rem;">Fit Screen</button>
+          <button class="btn btn-secondary" id="btnResetLayout" style="font-size:0.75rem; padding:0.35rem 0.6rem;">Auto Layout</button>
+        </div>
+
+        <!-- SVG Graph Viewport Container -->
+        <div id="graphCanvasContainer" style="width:100%; height:100%;">
+          <!-- SVG rendered dynamically by GraphRenderer.js -->
+        </div>
+
+        <!-- Graph Legend -->
+        <div class="canvas-legend" aria-label="Graph Legend">
+          <div class="legend-item">
+            <span class="legend-dot ready"></span>
+            <span>In-Degree 0 (Ready)</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot active"></span>
+            <span>Active / Visiting</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot sorted"></span>
+            <span>Sorted / Scheduled</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-dot cycle"></span>
+            <span>Cycle / Deadlock</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Algorithm Studio & Semester Planner -->
+      <aside class="sidebar-panel right" aria-label="Algorithm Studio and Semester Planning">
+        <!-- Navigation Tabs for Algorithms -->
+        <nav class="algo-tabs" role="tablist">
+          <button class="tab-btn active" data-mode="topo" id="tabTopo" role="tab" aria-selected="true">
+            Topological Sort
+          </button>
+          <button class="tab-btn" data-mode="bfs" id="tabBfs" role="tab" aria-selected="false">
+            BFS Traversal
+          </button>
+          <button class="tab-btn" data-mode="dfs" id="tabDfs" role="tab" aria-selected="false">
+            DFS Traversal
+          </button>
+          <button class="tab-btn" data-mode="cycle" id="tabCycle" role="tab" aria-selected="false">
+            Cycle Detector
+          </button>
+          <button class="tab-btn" data-mode="planner" id="tabPlanner" role="tab" aria-selected="false">
+            Semester Plan
+          </button>
+        </nav>
+
+        <!-- View 1: Step-by-Step Algorithm Stepper (Topo, BFS, DFS, Cycle) -->
+        <div id="stepperSection" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+          <!-- Controls Bar -->
+          <div class="stepper-bar">
+            <div class="stepper-controls" role="group" aria-label="Playback Controls">
+              <button class="step-btn" id="btnStepFirst" title="First Step">⏮</button>
+              <button class="step-btn" id="btnStepPrev" title="Previous Step">◀</button>
+              <button class="step-btn play-btn" id="btnStepPlay" title="Auto-Play Algorithm">▶</button>
+              <button class="step-btn" id="btnStepNext" title="Next Step">▶</button>
+              <button class="step-btn" id="btnStepLast" title="Last Step">⏭</button>
+            </div>
+
+            <div class="speed-selector">
+              <label for="speedSelect">Speed:</label>
+              <select id="speedSelect">
+                <option value="1800">0.5x</option>
+                <option value="1000" selected>1.0x</option>
+                <option value="500">2.0x</option>
+                <option value="200">4.0x</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Step Progress -->
+          <div class="step-progress-wrapper">
+            <div class="step-progress-header">
+              <span>Algorithm Execution Progress</span>
+              <strong id="stepCounter">Step 1 of 1</strong>
+            </div>
+            <div class="step-progress-track">
+              <div class="step-progress-fill" id="stepProgressFill"></div>
+            </div>
+          </div>
+
+          <!-- Stepper Scrollable Body -->
+          <div class="panel-body" style="gap:0.85rem;">
+            <!-- Current Step Explanation Banner -->
+            <div class="step-explanation-card" id="stepExplanationCard">
+              <span class="step-type-badge" id="stepTypeBadge">INIT</span>
+              <h3 class="step-headline" id="stepHeadline">Initialize Algorithm</h3>
+              <p class="step-detail" id="stepDetail">Ready to explore graph relationships.</p>
+            </div>
+
+            <!-- Live Data Structures Section -->
+            <div class="data-structures-section" id="dsContainer">
+              <!-- Dynamically populated Queue, Call Stack, In-Degrees, etc. -->
+            </div>
+          </div>
+        </div>
+
+        <!-- View 2: Semester Planner View -->
+        <div id="plannerSection" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+          <!-- Constraints Configuration Bar -->
+          <div style="padding:0.75rem; border-bottom:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:0.5rem; background:rgba(0,0,0,0.2);">
+            <div class="semester-controls-bar">
+              <div class="control-field">
+                <label for="plannerCreditsInput">Max Credits / Sem</label>
+                <input type="number" id="plannerCreditsInput" value="12" min="3" max="24" />
+              </div>
+              <div class="control-field">
+                <label for="plannerCoursesInput">Max Courses / Sem</label>
+                <input type="number" id="plannerCoursesInput" value="3" min="1" max="8" />
+              </div>
+            </div>
+
+            <div style="display:flex; gap:0.5rem;">
+              <button class="btn btn-primary" id="btnRunPlanner" style="flex:1;">
+                <span>⚡ Recompute Plan</span>
+              </button>
+              <button class="btn btn-secondary" id="btnExportPlan" title="Copy Plan to Clipboard in Markdown format">
+                <span>📋 Export MD</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Planner Scrollable Body -->
+          <div class="panel-body" style="gap:0.85rem;">
+            <!-- Prominent Cycle Warning Callout -->
+            <div class="cycle-alert-banner" id="cycleAlertBanner" style="display:none;">
+              <!-- Populated when cycle exists -->
+            </div>
+
+            <!-- Generated Semester Cards & Explainable Decisions -->
+            <div id="semesterResultsContainer">
+              <!-- Populated dynamically with Semester 1, Semester 2 cards and 'Why eligible' notes -->
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Modal 1: Add / Edit Course -->
+    <div class="modal-backdrop" id="courseModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modalTitle">Add University Course</h3>
+          <button class="btn-icon" id="btnCloseModal" aria-label="Close Modal">✕</button>
+        </div>
+        <form id="courseForm">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="inputCourseId">Course Code / ID *</label>
+              <input type="text" id="inputCourseId" class="form-control" placeholder="e.g. CS101, MATH201" required />
+            </div>
+
+            <div class="form-group">
+              <label for="inputCourseName">Course Title / Name *</label>
+              <input type="text" id="inputCourseName" class="form-control" placeholder="e.g. Programming I" required />
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+              <div class="form-group">
+                <label for="inputCourseCredits">Credits *</label>
+                <input type="number" id="inputCourseCredits" class="form-control" value="3" min="1" max="10" required />
+              </div>
+              <div class="form-group">
+                <label for="selectCoursePriority">Scheduling Priority</label>
+                <select id="selectCoursePriority" class="form-control">
+                  <option value="high">High (Take early)</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="low">Low (Elective)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Select Prerequisites (Courses that must be taken BEFORE this course):</label>
+              <div class="prereq-checkbox-list" id="prereqCheckboxContainer">
+                <!-- Checkboxes populated dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="btnDeleteCourse" style="margin-right:auto; color:#F87171; display:none;">
+              🗑️ Delete
+            </button>
+            <button type="button" class="btn btn-secondary" id="btnCancelModal">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btnSaveCourse">Save Course</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal 2: Academic Graph Matrices & Representations -->
+    <div class="modal-backdrop" id="matrixModal" role="dialog" aria-modal="true" aria-labelledby="matrixModalTitle">
+      <div class="modal-dialog" style="max-width:640px;">
+        <div class="modal-header">
+          <h3 class="modal-title" id="matrixModalTitle">Graph Representation & Mathematical Model</h3>
+          <button class="btn-icon" id="btnCloseMatrixModal" aria-label="Close Modal">✕</button>
+        </div>
+        <div class="modal-body" id="matrixContent">
+          <!-- Filled dynamically with adjacency list, reverse list, in-degrees, out-degrees -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+  </div>
+
+  <!-- Application Entry Point (ES Module) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
